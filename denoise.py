@@ -34,6 +34,10 @@
 #
 # TODO:
 #
+#   * Implement option for passing required DPI of an image.
+#
+#   * Implement option for selecting color channel to denoise.
+#
 #
 # ============================================================================
 

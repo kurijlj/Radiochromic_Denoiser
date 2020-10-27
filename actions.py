@@ -51,12 +51,12 @@
 # Modules import section
 # =============================================================================
 
-from cv2 import imwrite
 from imghdr import what
 from models import DataDir
 from models import Path
 from PIL import Image
 from sys import stderr
+import cv2
 import numpy as np
 
 
@@ -196,49 +196,33 @@ class DefaultAction(ProgramAction):
                 img = Image.open(path)
 
                 # We require that dpi persists along both axes and it must be
-                # equal to the user set dpi.
-                if img.info['dpi'][0] != DPI or img.info['dpi'][1] != DPI:
+                # equal to the user set dpi. We use pillow Image.open facility
+                # to read the dpi tag, since 'open' does not actually read the
+                # image until we access image pixels.
+                img_dpi = img.info['dpi']
+                img.close() # We don't need image anymore so close it.
+
+                if img_dpi[0] != DPI or img_dpi[1] != DPI:
                     print(
-                        '{0}: Image \'{1}\' does not conform to the rquired '.\
+                        '{0}: Image \'{1}\' does not conform to the required'.\
                         format(self._program_name, Path(path).name)
-                        + 'dpi: {0}.'.format(DPI),
+                        + ' dpi: {0}.'.format(DPI),
                         file=stderr
                         )
 
-                    # We don't need this image anymore so close it.
-                    img.close()
-
                 else:
-                    image_data.append(img)
+                    # Read image data as array.
+                    pixel_data = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)\
+                        .astype(np.float)
+                    image_data.append(pixel_data)
 
         if image_data:
+            # Do some image manipulation just for demo purposes.
+            image_data[0][:, :, 0] = image_data[0][:, :, 0] / 3.0
+            image_data[0][:, :, 1] = image_data[0][:, :, 1] / 3.0
+            image_data[0][:, :, 2] = image_data[0][:, :, 2] / 3.0
 
-            # Separate color channels and load them as NumPy arrays.
-            red_pixels = np.asarray(image_data[0].getchannel('R'))
-            green_pixels = np.asarray(image_data[0].getchannel('G'))
-            blue_pixels = np.asarray(image_data[0].getchannel('B'))
-
-            height, width = red_pixels.shape
-            channels = 3
-
-            # Create an new image from pixel arrays.
-            averaged = np.zeros((height, width, channels), dtype=np.uint16)
-            averaged[:, :, 2] = blue_pixels
-            averaged[:, :, 1] = green_pixels
-            averaged[:, :, 0] = red_pixels
-
-            # result = Image.fromarray(averaged)
-
-            imwrite('result.tif', averaged)
-            #   result.save(
-            #       'result.tif',
-            #       format='TIFF',
-            #       dpi=(DPI, DPI)
-            #       )
-
-            # We have finished with image processing. Close all images and exit
-            # application.
-            for image in image_data:
-                image.close()
+            # Save just the red channel.
+            cv2.imwrite('result.tif', image_data[0][:, :, 2].astype(np.uint16))
 
         self._exit_app(0)
