@@ -2,7 +2,7 @@
 """TODO: Put module docstring HERE.
 """
 
-#==============================================================================
+# =============================================================================
 # Copyright (C) 2020 Ljubomir Kurij <kurijlj@gmail.com>
 #
 # This file is part of Radiochromic Denoiser.
@@ -18,16 +18,16 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-#==============================================================================
+# =============================================================================
 
 
-#==============================================================================
+# =============================================================================
 #
 # 2020-10-25 Ljubomir Kurij <ljubomir_kurij@protonmail.com>
 #
 # * mda.py: created.
 #
-#==============================================================================
+# =============================================================================
 
 
 # ============================================================================
@@ -51,13 +51,15 @@
 # Modules import section
 # =============================================================================
 
+from sys import stderr
 from imghdr import what
+from tifffile import (
+    imwrite,
+    TiffFile
+    )
+import numpy as np
 from models import DataDir
 from models import Path
-from PIL import Image
-from sys import stderr
-import cv2
-import numpy as np
 
 
 # =============================================================================
@@ -66,9 +68,27 @@ import numpy as np
 
 DPI = 400
 
-#==============================================================================
+
+# =============================================================================
+# Utility classes and functions
+# =============================================================================
+
+def res_unit_string(res_unit):
+    """TODO: Put function docstring here.
+    """
+
+    if res_unit == 2:
+        return 'dpi'
+
+    if res_unit == 3:
+        return 'dpcm'
+
+    return 'none'
+
+
+# =============================================================================
 # App action classes
-#==============================================================================
+# =============================================================================
 
 class ProgramAction():
     """Abstract base class for all program actions, that provides execute.
@@ -93,8 +113,8 @@ class ProgramUsageAction(ProgramAction):
     def __init__(self, parser, exitf):
         super().__init__(exitf)
         self._usg_msg = \
-        '{usage}Try \'{prog} --help\' for more information.'\
-        .format(usage=parser.format_usage(), prog=parser.prog)
+            '{usage}Try \'{prog} --help\' for more information.'\
+            .format(usage=parser.format_usage(), prog=parser.prog)
 
     def execute(self):
         """Put method docstring HERE.
@@ -112,8 +132,8 @@ class ShowVersionAction(ProgramAction):
     def __init__(self, prog, ver, year, author, license, exitf):
         super().__init__(exitf)
         self._ver_msg = \
-        '{0} {1} Copyright (C) {2} {3}\n{4}'\
-        .format(prog, ver, year, author, license)
+            '{0} {1} Copyright (C) {2} {3}\n{4}'\
+            .format(prog, ver, year, author, license)
 
     def execute(self):
         """Put method docstring HERE.
@@ -177,7 +197,13 @@ class DefaultAction(ProgramAction):
             self._exit_app(3)
 
         # Containter to hold opened image data.
-        image_data = list()
+        pixels_data = list()
+
+        # Reference image size. Set from the first image in the dir.
+        ref_width = ref_height = None
+
+        # Reference resolution. Set from the first image in the dir.
+        ref_res_unit = None
 
         for path in fl:
             # Traverse file list and check if files in the dir are 'tiff'
@@ -193,36 +219,75 @@ class DefaultAction(ProgramAction):
 
             else:
                 print('Loading image: \'{0}\'.'.format(Path(path).name))
-                img = Image.open(path)
+                tif_file = TiffFile(path)
 
                 # We require that dpi persists along both axes and it must be
-                # equal to the user set dpi. We use pillow Image.open facility
-                # to read the dpi tag, since 'open' does not actually read the
-                # image until we access image pixels.
-                img_dpi = img.info['dpi']
-                img.close() # We don't need image anymore so close it.
+                # equal to the user set dpi.
+                res_x = tif_file.pages[0].tags['XResolution'].value[0]
+                res_y = tif_file.pages[0].tags['YResolution'].value[0]
+                res_unit = tif_file.pages[0].tags['ResolutionUnit'].value
 
-                if img_dpi[0] != DPI or img_dpi[1] != DPI:
+                if not ref_res_unit:
+                    ref_res_unit = res_unit
+
+                if res_x != DPI or res_y != DPI:
                     print(
-                        '{0}: Image \'{1}\' does not conform to the required'.\
-                        format(self._program_name, Path(path).name)
-                        + ' dpi: {0}.'.format(DPI),
+                        '{0}: Image \'{1}\' does not conform to the required'
+                        .format(self._program_name, Path(path).name)
+                        + ' resolution: {0}.'.format(DPI),
+                        file=stderr
+                        )
+
+                elif res_unit != ref_res_unit:
+                    print(
+                        '{0}: Image \'{1}\' does not conform to the required'
+                        .format(self._program_name, Path(path).name)
+                        + ' resolution units: {0}.'
+                        .format(res_unit_string(ref_res_unit)),
                         file=stderr
                         )
 
                 else:
                     # Read image data as array.
-                    pixel_data = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)\
-                        .astype(np.float)
-                    image_data.append(pixel_data)
+                    pixels = tif_file.asarray().astype(np.float)
 
-        if image_data:
+                    # Check if image size have been set.
+                    if not ref_width:
+                        ref_height = pixels.shape[0]
+                        ref_width = pixels.shape[1]
+                        pixels_data.append(pixels)
+
+                    # If image size is set compare size of the current image
+                    # with a reference image size.
+                    elif pixels.shape[0] == ref_height\
+                            and pixels.shape[1] == ref_width:
+                        # Image conforms to the refernce size so put it on the
+                        # data stack.
+                        pixels_data.append(pixels)
+
+                    else:
+                        # Image does not conform to the refernce size so we
+                        # can't process it. We dicard the image and inform user
+                        # about it.
+                        print(
+                            '{0}: Image \'{1}\' does not conform to the'
+                            .format(self._program_name, Path(path).name)
+                            + ' required image size (HxW: {0}x{1}).'
+                            .format(ref_height, ref_width),
+                            file=stderr
+                            )
+
+        if pixels_data:
             # Do some image manipulation just for demo purposes.
-            image_data[0][:, :, 0] = image_data[0][:, :, 0] / 3.0
-            image_data[0][:, :, 1] = image_data[0][:, :, 1] / 3.0
-            image_data[0][:, :, 2] = image_data[0][:, :, 2] / 3.0
+            pixels_data[0][:, :, 0] = pixels_data[0][:, :, 0] / 3.0
+            pixels_data[0][:, :, 1] = pixels_data[0][:, :, 1] / 3.0
+            pixels_data[0][:, :, 2] = pixels_data[0][:, :, 2] / 3.0
 
-            # Save just the red channel.
-            cv2.imwrite('result.tif', image_data[0][:, :, 2].astype(np.uint16))
+            imwrite(
+                'demo_result.tif',
+                pixels_data[0].astype(np.uint16),
+                resolution=(DPI, DPI),
+                metadata={'ResolutionUnit': ref_res_unit}
+                )
 
         self._exit_app(0)
