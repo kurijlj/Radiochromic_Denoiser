@@ -33,7 +33,6 @@
 # ============================================================================
 #
 # TODO:
-#   * Implement option switch for imputing required dpi.
 #
 #
 # ============================================================================
@@ -58,8 +57,11 @@ from tifffile import (
     TiffFile
     )
 import numpy as np
-from models import DataDir
-from models import Path
+from models import (
+    DataDir,
+    Path,
+    res_unit_string
+    )
 
 
 # =============================================================================
@@ -67,23 +69,6 @@ from models import Path
 # =============================================================================
 
 DPI = 400
-
-
-# =============================================================================
-# Utility classes and functions
-# =============================================================================
-
-def res_unit_string(res_unit):
-    """TODO: Put function docstring here.
-    """
-
-    if res_unit == 2:
-        return 'dpi'
-
-    if res_unit == 3:
-        return 'dpcm'
-
-    return 'none'
 
 
 # =============================================================================

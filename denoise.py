@@ -308,6 +308,15 @@ There is NO WARRANTY, to the extent permitted by law.'
             metavar='SCANS_DIR',
             type=str,
             nargs='?',
+            default='.',
+            help='directory holding scans to be averaged and denoised. \
+Current directory is searched by default.')
+    program.add_argument(
+            '-r', '--ref-resolution',
+            metavar='REF_RES',
+            type=str,
+            nargs='?',
+            default='400dpi',
             help='directory holding scans to be averaged and denoised. \
 Current directory is searched by default.')
 

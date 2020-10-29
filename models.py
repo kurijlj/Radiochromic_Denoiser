@@ -167,3 +167,16 @@ class DataDir():
             return None
 
         return None
+
+
+def res_unit_string(res_unit):
+    """TODO: Put function docstring here.
+    """
+
+    if res_unit == 2:
+        return 'dpi'
+
+    if res_unit == 3:
+        return 'dpcm'
+
+    return 'none'
