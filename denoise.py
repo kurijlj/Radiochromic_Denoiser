@@ -2,7 +2,7 @@
 """TODO: Put module docstring HERE.
 """
 
-#==============================================================================
+# =============================================================================
 # Copyright (C) 2020 Ljubomir Kurij <kurijlj@gmail.com>
 #
 # This file is part of Radiochromic Denoiser.
@@ -18,16 +18,16 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-#==============================================================================
+# =============================================================================
 
 
-#==============================================================================
+# =============================================================================
 #
 # 2020-10-25 Ljubomir Kurij <ljubomir_kurij@protonmail.com>
 #
 # * denoiser.py: created.
 #
-#==============================================================================
+# =============================================================================
 
 
 # ============================================================================
@@ -63,9 +63,9 @@ import actions
 # =============================================================================
 
 
-#==============================================================================
+# =============================================================================
 # Utility classes and functions
-#==============================================================================
+# =============================================================================
 
 def _format_epilog(epilog_addition, bug_mail):
     """Formatter for generating help epilogue text. Help epilogue text is an
@@ -87,8 +87,7 @@ def _format_epilog(epilog_addition, bug_mail):
         return None
 
     if bug_mail is not None:
-        fmt_mail = 'Report bugs to <{bug_mail}>.'\
-            .format(bug_mail = bug_mail)
+        fmt_mail = 'Report bugs to <{0}>.'.format(bug_mail)
     else:
         fmt_mail = None
 
@@ -99,8 +98,7 @@ def _format_epilog(epilog_addition, bug_mail):
         fmt_eplg = epilog_addition
 
     else:
-        fmt_eplg = '{addition}\n\n{mail}'\
-            .format(addition = epilog_addition, mail = fmt_mail)
+        fmt_eplg = '{0}\n\n{1}'.format(epilog_addition, fmt_mail)
 
     return fmt_eplg
 
@@ -112,9 +110,9 @@ def _formulate_action(action, **kwargs):
     return action(**kwargs)
 
 
-#==============================================================================
+# =============================================================================
 # Command line app class
-#==============================================================================
+# =============================================================================
 
 class CommandLineApp():
     """Actual command line app object containing all relevant application
@@ -123,15 +121,17 @@ class CommandLineApp():
     command line.
     """
 
-    def __init__(self,
-        program_name=None,
-        program_description=None,
-        program_license=None,
-        version_string=None,
-        year_string=None,
-        author_name=None,
-        author_mail=None,
-        epilog=None):
+    def __init__(
+            self,
+            program_name=None,
+            program_description=None,
+            program_license=None,
+            version_string=None,
+            year_string=None,
+            author_name=None,
+            author_mail=None,
+            epilog=None
+            ):
 
         self.program_license = program_license
         self.version_string = version_string
@@ -142,9 +142,9 @@ class CommandLineApp():
         fmt_eplg = _format_epilog(epilog, author_mail)
 
         self._parser = argparse.ArgumentParser(
-            prog = program_name,
-            description = program_description,
-            epilog = fmt_eplg,
+            prog=program_name,
+            description=program_description,
+            epilog=fmt_eplg,
             formatter_class=argparse.RawDescriptionHelpFormatter
             )
 
@@ -157,7 +157,6 @@ class CommandLineApp():
 
         self._action = None
 
-
     @property
     def program_name(self):
         """Utility function that makes accessing program name attribute
@@ -165,14 +164,12 @@ class CommandLineApp():
         """
         return self._parser.prog
 
-
     @property
     def program_description(self):
         """Utility function that makes accessing program description
         attribute neat and hides implementation details.
         """
         return self._parser.description
-
 
     def add_argument_group(self, title=None, description=None):
         """Adds an argument group to application object.
@@ -189,7 +186,6 @@ class CommandLineApp():
 
         return group
 
-
     def _group_by_title(self, title):
         group = None
 
@@ -199,7 +195,6 @@ class CommandLineApp():
                 break
 
         return group
-
 
     def add_argument(self, *args, **kwargs):
         """Wrapper for add_argument methods of argparse module. If
@@ -217,12 +212,11 @@ class CommandLineApp():
 
             if group is None:
                 raise ValueError(
-                'Trying to reference nonexisten argument group.'
-                )
+                    'Trying to reference nonexisten argument group.'
+                    )
 
-            kwargsr = {k:kwargs[k] for k in kwargs if k != 'group'}
-            group.add_argument( *args, **kwargsr)
-
+            kwargsr = {k: kwargs[k] for k in kwargs if k != 'group'}
+            group.add_argument(*args, **kwargsr)
 
     def parse_args(self, args=None, namespace=None):
         """Wrapper for parse_args method of a parser object. It also
@@ -255,9 +249,11 @@ class CommandLineApp():
                 actions.DefaultAction,
                 prog=self._parser.prog,
                 exitf=self._parser.exit,
-                scans_dir=arguments.scans_dir
                 )
 
+            self._action.scans_path = arguments.scans_dir
+            self._action.resolution = arguments.resolution
+            self._action.resolution_units = arguments.resolution_units
 
     def run(self):
         """This method executes action code.
@@ -266,16 +262,16 @@ class CommandLineApp():
         self._action.execute()
 
 
-#==============================================================================
+# =============================================================================
 # Script main body
-#==============================================================================
+# =============================================================================
 
 if __name__ == '__main__':
-    PROGRAM_DESCRIPTION='\
+    PROGRAM_DESCRIPTION = '\
 CLI application development for Python implementing argp option parsing \
 engine.\n\
 Mandatory arguments to long options are mandatory for short options too.'
-    PROGRAM_LICENSE='\
+    PROGRAM_LICENSE = '\
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\
 \n\
 This is free software: you are free to change and redistribute it.\n\
@@ -312,13 +308,22 @@ There is NO WARRANTY, to the extent permitted by law.'
             help='directory holding scans to be averaged and denoised. \
 Current directory is searched by default.')
     program.add_argument(
-            '-r', '--ref-resolution',
-            metavar='REF_RES',
+            '-u', '--resolution-units',
+            metavar='RES_UNITS',
             type=str,
             nargs='?',
-            default='400dpi',
-            help='directory holding scans to be averaged and denoised. \
-Current directory is searched by default.')
+            help='a convinience option for passing scans resolution units. \
+Option accepts two values: dpi (dots per inch) and dpm (dots per milimeter). \
+If this option is not supplied processing is carried out without taking\
+resolution into account.')
+    program.add_argument(
+            '-r', '--resolution',
+            metavar='REF_RES',
+            type=int,
+            nargs='?',
+            default=400,
+            help='a convinience option for passing reference scans resolution. \
+If resolution units are not supplied this option is ignored.')
 
     program.parse_args()
     program.run()

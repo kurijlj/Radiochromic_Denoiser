@@ -134,14 +134,56 @@ class DefaultAction(ProgramAction):
     to the stdout.
     """
 
-    def __init__(self, prog, exitf, scans_dir=None):
+    def __init__(self, prog, exitf):
         super().__init__(exitf)
         self._program_name = prog
-        if scans_dir is not None:
-            self._scans_path = DataDir(scans_dir, '.tif')
-        else:
-            # If no path is supplied set current dir as search path.
-            self._scans_path = DataDir('.', '.tif')
+        # Set default path for seraching for film scans.
+        self._scans_path = DataDir('.', '.tif')
+        self._resolution_units = None
+        self._resolution = None
+
+    @property
+    def scans_path(self):
+        """Put method docstring HERE.
+        """
+
+        return self._scans_path
+
+    @scans_path.setter
+    def scans_path(self, scans_path):
+        """Put method docstring HERE.
+        """
+
+        if scans_path is not None:
+            self._scans_path = DataDir(scans_path, '.tif')
+
+    @property
+    def resolution(self):
+        """Put method docstring HERE.
+        """
+
+        return self._resolution
+
+    @scans_path.setter
+    def scans_path(self, resolution):
+        """Put method docstring HERE.
+        """
+
+        self._resolution = resolution
+
+    @property
+    def resolution_units(self):
+        """Put method docstring HERE.
+        """
+
+        return self._resolution_units
+
+    @scans_path.setter
+    def resolution_units(self, resolution_units):
+        """Put method docstring HERE.
+        """
+
+        self._resolution_units = resolution_units
 
     def execute(self):
         """Put method docstring HERE.
