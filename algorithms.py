@@ -25,7 +25,7 @@
 #
 # 2020-10-24 Ljubomir Kurij <ljubomir_kurij@protonmail.com.com>
 #
-# * models.py: created.
+# * algorithms.py: created.
 #
 # =============================================================================
 
@@ -180,3 +180,16 @@ def res_unit_string(res_unit):
         return 'dpcm'
 
     return 'none'
+
+
+def res_unit_value(res_unit_str):
+    """TODO: Put function docstring here.
+    """
+
+    if res_unit_str == 'dpi':
+        return 2
+
+    if res_unit_str == 'dpcm':
+        return 3
+
+    return 1

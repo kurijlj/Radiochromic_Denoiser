@@ -51,16 +51,18 @@
 # =============================================================================
 
 from sys import stderr
+from enum import Enum
 from imghdr import what
 from tifffile import (
     imwrite,
     TiffFile
     )
 import numpy as np
-from models import (
+from algorithms import (
     DataDir,
     Path,
-    res_unit_string
+    res_unit_string,
+    res_unit_value
     )
 
 
@@ -69,6 +71,28 @@ from models import (
 # =============================================================================
 
 DPI = 400
+
+
+# =============================================================================
+# Module utility classes and functions
+# =============================================================================
+
+class OptionError(Enum):
+    """TODO: Put class docstring here.
+    """
+
+    noerror = 0
+    wrongunits = 1
+
+class PathError(Enum):
+    """TODO: Put class docstring here.
+    """
+
+    noerror = 0
+    nonexistent = 2
+    notdir = 3
+    emptydir = 4
+    novalidimages = 5
 
 
 # =============================================================================
@@ -141,6 +165,177 @@ class DefaultAction(ProgramAction):
         self._scans_path = DataDir('.', '.tif')
         self._resolution_units = None
         self._resolution = None
+        self._size = {'height': None, 'width': None}
+        self._dir_contents = None
+        self._for_processing = list()
+        self._pixels_data = None
+
+    def _validate_contents(self):
+        """Put method docstring HERE.
+        """
+
+        for path in self._dir_contents:
+            # Traverse file list and check if files in the dir are 'tiff'
+            # images and if are of required dpi.
+            if what(path) != 'tiff':
+                print(
+                    '{0}: File \'{1}\' is not an \'.tiff\''.format(
+                        self._program_name,
+                        Path(path).name
+                        ),
+                    file=stderr
+                    )
+
+                # Not a tiff file so got to next file in the list.
+                continue
+
+            print('Loading image: \'{0}\'.'.format(Path(path).name))
+            tif_file = TiffFile(path)
+
+            # Are target resolution and resolution units set by the user.
+            if self._res_units_set():
+                # Resolution and resolution units are set so we have to check
+                # if images from the list conform to user set requirements.
+
+                units = res_unit_string(
+                    tif_file.pages[0].tags['ResolutionUnit'].value
+                    )
+                res_x = tif_file.pages[0].tags['XResolution'].value[0]
+                res_y = tif_file.pages[0].tags['YResolution'].value[0]
+
+                if units != self._resolution_units:
+                    print(
+                        '{0}: Image \'{1}\' does not conform to the required'
+                        .format(self._program_name, Path(path).name)
+                        + ' resolution units: {0}.'
+                        .format(self._resolution_units),
+                        file=stderr
+                        )
+
+                    # Image resolution units don't conform to a user set
+                    # resolution units so go to the next image in the list.
+                    continue
+
+                if res_x != self._resolution or res_y != self._resolution:
+                    print(
+                        '{0}: Image \'{1}\' does not conform to the required'
+                        .format(self._program_name, Path(path).name)
+                        + ' resolution: {0}.'.format(self._resolution),
+                        file=stderr
+                        )
+
+                    # Image resolution doesn't conform to a user set resolution
+                    # units so go to the next image in the list.
+                    continue
+
+            # Check if reference image size have been set.
+            height = tif_file.pages[0].shape[0]
+            width = tif_file.pages[0].shape[1]
+            if not self._size['height']:
+                self._size['height'] = height
+                self._size['width'] = width
+
+            # Compare size of the current image with a reference image size.
+            if height != self._size['height']\
+                    or width != self._size['width']:
+                # Image does not conform to the refernce size so we
+                # can't process it. We dicard the image and inform user
+                # about it.
+                print(
+                    '{0}: Image \'{1}\' size is not equal to the size of'
+                    .format(self._program_name, Path(path).name)
+                    + ' first image in the list (HxW: {0}x{1}).'\
+                    .format(self._size['height'], self._size['width']),
+                    file=stderr
+                    )
+
+                # Image size is not equal to the image size of the first image
+                # in the list so we skip this image and go to the next image
+                # in the list.
+                continue
+
+            # Image size is equal to the refernce image size so put it on the
+            # data stack.
+            self._for_processing.append(tif_file)
+
+    def _empty_dir(self):
+        """Put method docstring HERE.
+        """
+
+        fl = self._scans_path.listDataFiles()
+
+        if fl is None:
+            # Supplied path contains no files.
+            print(
+                '{0}: Supplied path \'{1}\' contains no files.'.format(
+                    self._program_name,
+                    self._scans_path.absolutePath
+                    ),
+                file=stderr
+                )
+
+            return PathError.emptydir
+
+        return PathError.noerror
+
+    def _res_units_set(self):
+        """Put method docstring HERE.
+        """
+
+        if self._resolution_units is not None:
+            return True
+
+        return False
+
+    def _validate_res_units(self):
+        """Put method docstring HERE.
+        """
+
+        valid = ['dpi', 'dpcm']
+
+        if self._res_units_set():
+            if self._resolution_units in valid:
+                return OptionError.noerror
+
+            # Invalid units string passed as option argument.
+            print(
+                '{0}: Supplied rsolution units \'{1}\' are not supported.'\
+                        .format(
+                    self._program_name,
+                    self._resolution_units
+                    ),
+                file=stderr
+                )
+            return OptionError.wrongunits
+
+        # If no units are set we also evaluate that to True.
+        return OptionError.noerror
+
+    def _validate_scans_path(self):
+        """Put method docstring HERE.
+        """
+
+        if not self._scans_path.exists:
+            print(
+                '{0}: Supplied path \'{1}\' does not exist.'.format(
+                    self._program_name,
+                    self._scans_path.absolutePath
+                    ),
+                file=stderr
+                )
+            return PathError.nonexistent
+
+        if not self._scans_path.isDir:
+            print(
+                '{0}: Supplied path \'{1}\' is not a dir.'.format(
+                    self._program_name,
+                    self._scans_path.absolutePath
+                    ),
+                file=stderr
+                )
+            return PathError.notdir
+
+        return PathError.noerror
 
     @property
     def scans_path(self):
@@ -164,8 +359,8 @@ class DefaultAction(ProgramAction):
 
         return self._resolution
 
-    @scans_path.setter
-    def scans_path(self, resolution):
+    @resolution.setter
+    def resolution(self, resolution):
         """Put method docstring HERE.
         """
 
@@ -178,7 +373,7 @@ class DefaultAction(ProgramAction):
 
         return self._resolution_units
 
-    @scans_path.setter
+    @resolution_units.setter
     def resolution_units(self, resolution_units):
         """Put method docstring HERE.
         """
@@ -189,132 +384,66 @@ class DefaultAction(ProgramAction):
         """Put method docstring HERE.
         """
 
-        # Do some sanity checks first.
-        if not self._scans_path.exists:
+        # Do some sanity checks first. First we chack if all options arguments
+        # passed are valid. So verify if correct resolution units are passed
+        # as option.
+        error = self._validate_res_units()
+        if error != OptionError.noerror:
+            self._exit_app(error)
+
+        # Then we check if supplied path to scans exists at all, is directory
+        # and is not empty.
+        error = self._validate_scans_path()
+        if error != PathError.noerror:
+            self._exit_app(error)
+
+        error = self._empty_dir()
+        if error != PathError.noerror:
+            self._exit_app(error)
+
+        self._dir_contents = self._scans_path.listDataFiles()
+
+        # Check if contents of the user supplied directory confrom to the
+        # specified conditions.
+        self._validate_contents()
+
+        if not self._for_processing:
+            # Supplied path contains no valid image files.
             print(
-                '{0}: Supplied path \'{1}\' does not exist.'.format(
+                '{0}: Supplied path \'{1}\' contains no valid image files.'\
+                        .format(
                     self._program_name,
                     self._scans_path.absolutePath
                     ),
                 file=stderr
                 )
-            self._exit_app(1)
 
-        if not self._scans_path.isDir:
-            print(
-                '{0}: Supplied path \'{1}\' is not a dir.'.format(
-                    self._program_name,
-                    self._scans_path.absolutePath
-                    ),
-                file=stderr
-                )
-            self._exit_app(2)
+            self._exit_app(PathError.novalidimages)
 
-        fl = self._scans_path.listDataFiles()
+        # Do some image manipulation just for demo purposes.
+        # Read image data as array.
+        # pixels = tif_file.asarray().astype(np.float)
 
-        if fl is None:
-            # Supplied path does not exist.
-            print(
-                '{0}: Supplied path \'{1}\' contains no image files.'.format(
-                    self._program_name,
-                    self._scans_path.absolutePath
-                    ),
-                file=stderr
-                )
-            self._exit_app(3)
+        # Allocate memory for storage of processed pixel data.
+        result = self._for_processing[0].asarray().astype(np.float)
 
-        # Containter to hold opened image data.
-        pixels_data = list()
+        result[:, :, 0] = result[:, :, 0] / 3.0
+        result[:, :, 1] = result[:, :, 1] / 3.0
+        result[:, :, 2] = result[:, :, 2] / 3.0
 
-        # Reference image size. Set from the first image in the dir.
-        ref_width = ref_height = None
-
-        # Reference resolution. Set from the first image in the dir.
-        ref_res_unit = None
-
-        for path in fl:
-            # Traverse file list and check if files in the dir are 'tiff'
-            # images and if are of required dpi.
-            if what(path) != 'tiff':
-                print(
-                    '{0}: File \'{1}\' is not an \'.tiff\''.format(
-                        self._program_name,
-                        Path(path).name
-                        ),
-                    file=stderr
-                    )
-
-            else:
-                print('Loading image: \'{0}\'.'.format(Path(path).name))
-                tif_file = TiffFile(path)
-
-                # We require that dpi persists along both axes and it must be
-                # equal to the user set dpi.
-                res_x = tif_file.pages[0].tags['XResolution'].value[0]
-                res_y = tif_file.pages[0].tags['YResolution'].value[0]
-                res_unit = tif_file.pages[0].tags['ResolutionUnit'].value
-
-                if not ref_res_unit:
-                    ref_res_unit = res_unit
-
-                if res_x != DPI or res_y != DPI:
-                    print(
-                        '{0}: Image \'{1}\' does not conform to the required'
-                        .format(self._program_name, Path(path).name)
-                        + ' resolution: {0}.'.format(DPI),
-                        file=stderr
-                        )
-
-                elif res_unit != ref_res_unit:
-                    print(
-                        '{0}: Image \'{1}\' does not conform to the required'
-                        .format(self._program_name, Path(path).name)
-                        + ' resolution units: {0}.'
-                        .format(res_unit_string(ref_res_unit)),
-                        file=stderr
-                        )
-
-                else:
-                    # Read image data as array.
-                    pixels = tif_file.asarray().astype(np.float)
-
-                    # Check if image size have been set.
-                    if not ref_width:
-                        ref_height = pixels.shape[0]
-                        ref_width = pixels.shape[1]
-                        pixels_data.append(pixels)
-
-                    # If image size is set compare size of the current image
-                    # with a reference image size.
-                    elif pixels.shape[0] == ref_height\
-                            and pixels.shape[1] == ref_width:
-                        # Image conforms to the refernce size so put it on the
-                        # data stack.
-                        pixels_data.append(pixels)
-
-                    else:
-                        # Image does not conform to the refernce size so we
-                        # can't process it. We dicard the image and inform user
-                        # about it.
-                        print(
-                            '{0}: Image \'{1}\' does not conform to the'
-                            .format(self._program_name, Path(path).name)
-                            + ' required image size (HxW: {0}x{1}).'
-                            .format(ref_height, ref_width),
-                            file=stderr
-                            )
-
-        if pixels_data:
-            # Do some image manipulation just for demo purposes.
-            pixels_data[0][:, :, 0] = pixels_data[0][:, :, 0] / 3.0
-            pixels_data[0][:, :, 1] = pixels_data[0][:, :, 1] / 3.0
-            pixels_data[0][:, :, 2] = pixels_data[0][:, :, 2] / 3.0
-
+        if self._res_units_set():
             imwrite(
                 'demo_result.tif',
-                pixels_data[0].astype(np.uint16),
-                resolution=(DPI, DPI),
-                metadata={'ResolutionUnit': ref_res_unit}
+                result.astype(np.uint16),
+                resolution=(self._resolution, self._resolution),
+                metadata={'ResolutionUnit':
+                    res_unit_value(self._resolution_units)}
+                )
+
+        else:
+            imwrite(
+                'demo_result.tif',
+                result.astype(np.uint16),
                 )
 
         self._exit_app(0)

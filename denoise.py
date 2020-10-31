@@ -34,10 +34,6 @@
 #
 # TODO:
 #
-#   * Implement option for passing required DPI of an image.
-#
-#   * Implement option for selecting color channel to denoise.
-#
 #
 # ============================================================================
 
@@ -314,7 +310,7 @@ Current directory is searched by default.')
             nargs='?',
             help='a convinience option for passing scans resolution units. \
 Option accepts two values: dpi (dots per inch) and dpm (dots per milimeter). \
-If this option is not supplied processing is carried out without taking\
+If this option is not supplied processing is carried out without taking \
 resolution into account.')
     program.add_argument(
             '-r', '--resolution',
