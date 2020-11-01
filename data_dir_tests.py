@@ -50,10 +50,10 @@
 # Modules import section
 # =============================================================================
 
-from pathlib import Path
-from models import DataDir
-from os.path import basename
 import unittest
+from os.path import basename
+from pathlib import Path
+from algorithms import DataDir
 
 
 # =============================================================================
@@ -67,8 +67,8 @@ TEST_CASES = [
     DataDir('.'),
     DataDir('./data'),
     DataDir('./actions.py'),
-    DataDir('.', '.py'),
-    DataDir('./data', '.tif'),
+    DataDir('.', 'py'),
+    DataDir('./data', 'tif'),
     ]
 
 
@@ -134,6 +134,12 @@ class TestEmptyDatadir(unittest.TestCase):
 
         self.assertEqual(self._dataset.name, None)
 
+    def testIfEmpty(self):
+        """TODO: Put method docstring HERE.
+        """
+
+        self.assertEqual(self._dataset.isEmpty, True)
+
 
 class TestEmptyString(unittest.TestCase):
     """TODO: Put class docstring HERE.
@@ -186,6 +192,12 @@ class TestEmptyString(unittest.TestCase):
         """
 
         self.assertEqual(self._dataset.name, Path('').name)
+
+    def testIfEmpty(self):
+        """TODO: Put method docstring HERE.
+        """
+
+        self.assertEqual(self._dataset.isEmpty, False)
 
 
 class TestCurrentDir(unittest.TestCase):
@@ -240,6 +252,12 @@ class TestCurrentDir(unittest.TestCase):
 
         self.assertEqual(self._dataset.name, Path('.').name)
 
+    def testIfEmpty(self):
+        """TODO: Put method docstring HERE.
+        """
+
+        self.assertEqual(self._dataset.isEmpty, False)
+
 
 class TestRealDir(unittest.TestCase):
     """TODO: Put class docstring HERE.
@@ -286,12 +304,15 @@ class TestRealDir(unittest.TestCase):
         """
 
         fl = (
+            'img20191023_12463056.tif',
+            'img20191101_13592687.png',
             'QA20200727016.tif',
             'QA20200727017.tif',
             'QA20200727018.tif',
             'QA20200727019.tif',
             'QA20200727020.tif',
             'test_dummy.py',
+            'test_dummy.tif',
             'test_dummy.txt'
             )
 
@@ -312,6 +333,12 @@ class TestRealDir(unittest.TestCase):
         """
 
         self.assertEqual(self._dataset.name, Path('./data').name)
+
+    def testIfEmpty(self):
+        """TODO: Put method docstring HERE.
+        """
+
+        self.assertEqual(self._dataset.isEmpty, False)
 
 
 class TestRealFile(unittest.TestCase):
@@ -375,6 +402,12 @@ class TestRealFile(unittest.TestCase):
 
         self.assertEqual(self._dataset.name, Path('./actions.py').name)
 
+    def testIfEmpty(self):
+        """TODO: Put method docstring HERE.
+        """
+
+        self.assertEqual(self._dataset.isEmpty, True)
+
 
 class TestDirWithPythonScripts(unittest.TestCase):
     """TODO: Put class docstring HERE.
@@ -414,7 +447,7 @@ class TestDirWithPythonScripts(unittest.TestCase):
         """TODO: Put method docstring HERE.
         """
 
-        self.assertEqual(self._dataset.dataFileType, '.py')
+        self.assertEqual(self._dataset.dataFileType, 'py')
 
     def testFileList(self):
         """TODO: Put method docstring HERE.
@@ -422,9 +455,9 @@ class TestDirWithPythonScripts(unittest.TestCase):
 
         fl = (
             'actions.py',
+            'algorithms.py',
             'data_dir_tests.py',
-            'denoise.py',
-            'models.py'
+            'denoise.py'
             )
 
         result = list()
@@ -444,6 +477,12 @@ class TestDirWithPythonScripts(unittest.TestCase):
         """
 
         self.assertEqual(self._dataset.name, Path('.').name)
+
+    def testIfEmpty(self):
+        """TODO: Put method docstring HERE.
+        """
+
+        self.assertEqual(self._dataset.isEmpty, False)
 
 
 class TestDirWithTifImages(unittest.TestCase):
@@ -484,18 +523,20 @@ class TestDirWithTifImages(unittest.TestCase):
         """TODO: Put method docstring HERE.
         """
 
-        self.assertEqual(self._dataset.dataFileType, '.tif')
+        self.assertEqual(self._dataset.dataFileType, 'tif')
 
     def testFileList(self):
         """TODO: Put method docstring HERE.
         """
 
         fl = (
+            'img20191023_12463056.tif',
             'QA20200727016.tif',
             'QA20200727017.tif',
             'QA20200727018.tif',
             'QA20200727019.tif',
-            'QA20200727020.tif'
+            'QA20200727020.tif',
+            'test_dummy.tif'
             )
 
         result = list()
@@ -515,6 +556,12 @@ class TestDirWithTifImages(unittest.TestCase):
         """
 
         self.assertEqual(self._dataset.name, Path('./data').name)
+
+    def testIfEmpty(self):
+        """TODO: Put method docstring HERE.
+        """
+
+        self.assertEqual(self._dataset.isEmpty, False)
 
 
 # =============================================================================

@@ -25,7 +25,7 @@
 #
 # 2020-10-25 Ljubomir Kurij <ljubomir_kurij@protonmail.com>
 #
-# * mda.py: created.
+# * actions.py: created.
 #
 # =============================================================================
 
@@ -51,18 +51,19 @@
 # =============================================================================
 
 from sys import stderr
+from os.path import basename
 from enum import Enum
-from imghdr import what
 from tifffile import (
     imwrite,
     TiffFile
     )
 import numpy as np
 from algorithms import (
-    DataDir,
+    ColorChannelOption,
+    ImageDir,
     Path,
-    res_unit_string,
-    res_unit_value
+    res_unit_value,
+    TiffConformityMatch
     )
 
 
@@ -70,29 +71,22 @@ from algorithms import (
 # Module level constants
 # =============================================================================
 
-DPI = 400
-
 
 # =============================================================================
 # Module utility classes and functions
 # =============================================================================
 
-class OptionError(Enum):
+class AppError(Enum):
     """TODO: Put class docstring here.
     """
 
     noerror = 0
     wrongunits = 1
-
-class PathError(Enum):
-    """TODO: Put class docstring here.
-    """
-
-    noerror = 0
-    nonexistent = 2
+    nonexistentpath = 2
     notdir = 3
     emptydir = 4
     novalidimages = 5
+    invalidcolorchannel = 6
 
 
 # =============================================================================
@@ -162,159 +156,72 @@ class DefaultAction(ProgramAction):
         super().__init__(exitf)
         self._program_name = prog
         # Set default path for seraching for film scans.
-        self._scans_path = DataDir('.', '.tif')
-        self._resolution_units = None
-        self._resolution = None
-        self._size = {'height': None, 'width': None}
-        self._dir_contents = None
-        self._for_processing = list()
-        self._pixels_data = None
+        self._scans_path = ImageDir('.', 'tiff')
+        self._img_validator = TiffConformityMatch()
+        self._selchnl = ColorChannelOption()
 
-    def _validate_contents(self):
+    @property
+    def color_channel(self):
         """Put method docstring HERE.
         """
 
-        for path in self._dir_contents:
-            # Traverse file list and check if files in the dir are 'tiff'
-            # images and if are of required dpi.
-            if what(path) != 'tiff':
-                print(
-                    '{0}: File \'{1}\' is not an \'.tiff\''.format(
-                        self._program_name,
-                        Path(path).name
-                        ),
-                    file=stderr
-                    )
+        return self._selchnl.value
 
-                # Not a tiff file so got to next file in the list.
-                continue
-
-            print('Loading image: \'{0}\'.'.format(Path(path).name))
-            tif_file = TiffFile(path)
-
-            # Are target resolution and resolution units set by the user.
-            if self._res_units_set():
-                # Resolution and resolution units are set so we have to check
-                # if images from the list conform to user set requirements.
-
-                units = res_unit_string(
-                    tif_file.pages[0].tags['ResolutionUnit'].value
-                    )
-                res_x = tif_file.pages[0].tags['XResolution'].value[0]
-                res_y = tif_file.pages[0].tags['YResolution'].value[0]
-
-                if units != self._resolution_units:
-                    print(
-                        '{0}: Image \'{1}\' does not conform to the required'
-                        .format(self._program_name, Path(path).name)
-                        + ' resolution units: {0}.'
-                        .format(self._resolution_units),
-                        file=stderr
-                        )
-
-                    # Image resolution units don't conform to a user set
-                    # resolution units so go to the next image in the list.
-                    continue
-
-                if res_x != self._resolution or res_y != self._resolution:
-                    print(
-                        '{0}: Image \'{1}\' does not conform to the required'
-                        .format(self._program_name, Path(path).name)
-                        + ' resolution: {0}.'.format(self._resolution),
-                        file=stderr
-                        )
-
-                    # Image resolution doesn't conform to a user set resolution
-                    # units so go to the next image in the list.
-                    continue
-
-            # Check if reference image size have been set.
-            height = tif_file.pages[0].shape[0]
-            width = tif_file.pages[0].shape[1]
-            if not self._size['height']:
-                self._size['height'] = height
-                self._size['width'] = width
-
-            # Compare size of the current image with a reference image size.
-            if height != self._size['height']\
-                    or width != self._size['width']:
-                # Image does not conform to the refernce size so we
-                # can't process it. We dicard the image and inform user
-                # about it.
-                print(
-                    '{0}: Image \'{1}\' size is not equal to the size of'
-                    .format(self._program_name, Path(path).name)
-                    + ' first image in the list (HxW: {0}x{1}).'\
-                    .format(self._size['height'], self._size['width']),
-                    file=stderr
-                    )
-
-                # Image size is not equal to the image size of the first image
-                # in the list so we skip this image and go to the next image
-                # in the list.
-                continue
-
-            # Image size is equal to the refernce image size so put it on the
-            # data stack.
-            self._for_processing.append(tif_file)
-
-    def _empty_dir(self):
+    @color_channel.setter
+    def color_channel(self, chnl):
         """Put method docstring HERE.
         """
 
-        fl = self._scans_path.listDataFiles()
+        if chnl is not None:
+            self._selchnl = ColorChannelOption(chnl)
 
-        if fl is None:
-            # Supplied path contains no files.
-            print(
-                '{0}: Supplied path \'{1}\' contains no files.'.format(
-                    self._program_name,
-                    self._scans_path.absolutePath
-                    ),
-                file=stderr
-                )
-
-            return PathError.emptydir
-
-        return PathError.noerror
-
-    def _res_units_set(self):
+    @property
+    def image_validator(self):
         """Put method docstring HERE.
         """
 
-        if self._resolution_units is not None:
-            return True
+        return (
+            self._img_validator.target_size,
+            self._img_validator.target_units,
+            self._img_validator.target_resolution
+            )
 
-        return False
-
-    def _validate_res_units(self):
+    @property
+    def scans_path(self):
         """Put method docstring HERE.
         """
 
-        valid = ['dpi', 'dpcm']
+        return self._scans_path.absolutePath
 
-        if self._res_units_set():
-            if self._resolution_units in valid:
-                return OptionError.noerror
+    @scans_path.setter
+    def scans_path(self, scans_path):
+        """Put method docstring HERE.
+        """
 
+        if scans_path is not None:
+            self._scans_path = ImageDir(scans_path, 'tiff')
+
+    def execute(self):
+        """Put method docstring HERE.
+        """
+
+        # Do some sanity checks first. First we chack if all options arguments
+        # passed are valid. So verify if correct resolution units are passed
+        # as option.
+        if not self._img_validator.validUnits():
             # Invalid units string passed as option argument.
             print(
-                '{0}: Supplied rsolution units \'{1}\' are not supported.'\
+                '{0}: Supplied resolution units \'{1}\' are not supported.'\
                         .format(
                     self._program_name,
-                    self._resolution_units
+                    self._img_validator.target_units
                     ),
                 file=stderr
                 )
-            return OptionError.wrongunits
+            self._exit_app(AppError.wrongunits)
 
-        # If no units are set we also evaluate that to True.
-        return OptionError.noerror
-
-    def _validate_scans_path(self):
-        """Put method docstring HERE.
-        """
-
+        # Then we check if supplied path to scans exists at all, is directory
+        # and is not empty.
         if not self._scans_path.exists:
             print(
                 '{0}: Supplied path \'{1}\' does not exist.'.format(
@@ -323,7 +230,7 @@ class DefaultAction(ProgramAction):
                     ),
                 file=stderr
                 )
-            return PathError.nonexistent
+            self._exit_app(AppError.nonexistentpath)
 
         if not self._scans_path.isDir:
             print(
@@ -333,81 +240,103 @@ class DefaultAction(ProgramAction):
                     ),
                 file=stderr
                 )
-            return PathError.notdir
+            self._exit_app(AppError.notdir)
 
-        return PathError.noerror
+        if self._scans_path.isEmpty:
+            # Supplied path contains no files.
+            print(
+                '{0}: Supplied path \'{1}\' contains no image files.'.format(
+                    self._program_name,
+                    self._scans_path.absolutePath
+                    ),
+                file=stderr
+                )
+            self._exit_app(AppError.emptydir)
 
-    @property
-    def scans_path(self):
-        """Put method docstring HERE.
-        """
+        if not self._selchnl.isValid():
+            # Color channel option value is not valid.
+            print(
+                '{0}: Supplied color channel value ({1}) is not supported.'\
+                        .format(
+                    self._program_name,
+                    self._scans_path.absolutePath
+                    ),
+                file=stderr
+                )
+            self._exit_app(AppError.invalidcolorchannel)
 
-        return self._scans_path
-
-    @scans_path.setter
-    def scans_path(self, scans_path):
-        """Put method docstring HERE.
-        """
-
-        if scans_path is not None:
-            self._scans_path = DataDir(scans_path, '.tif')
-
-    @property
-    def resolution(self):
-        """Put method docstring HERE.
-        """
-
-        return self._resolution
-
-    @resolution.setter
-    def resolution(self, resolution):
-        """Put method docstring HERE.
-        """
-
-        self._resolution = resolution
-
-    @property
-    def resolution_units(self):
-        """Put method docstring HERE.
-        """
-
-        return self._resolution_units
-
-    @resolution_units.setter
-    def resolution_units(self, resolution_units):
-        """Put method docstring HERE.
-        """
-
-        self._resolution_units = resolution_units
-
-    def execute(self):
-        """Put method docstring HERE.
-        """
-
-        # Do some sanity checks first. First we chack if all options arguments
-        # passed are valid. So verify if correct resolution units are passed
-        # as option.
-        error = self._validate_res_units()
-        if error != OptionError.noerror:
-            self._exit_app(error)
-
-        # Then we check if supplied path to scans exists at all, is directory
-        # and is not empty.
-        error = self._validate_scans_path()
-        if error != PathError.noerror:
-            self._exit_app(error)
-
-        error = self._empty_dir()
-        if error != PathError.noerror:
-            self._exit_app(error)
-
-        self._dir_contents = self._scans_path.listDataFiles()
+        tifs = self._scans_path.listDataFiles()
+        valid_tifs = list()
 
         # Check if contents of the user supplied directory confrom to the
         # specified conditions.
-        self._validate_contents()
+        for tif in tifs:
+            print('Loading image: \'{0}\'.'.format(Path(tif).name))
+            tif_obj = TiffFile(tif)
+            self._img_validator.tiff_object = tif_obj
 
-        if not self._for_processing:
+            if not self._img_validator.unitsMatch():
+                print(
+                    '{0}: Image \'{1}\' does not conform to the required'
+                    .format(self._program_name, basename(tif))
+                    + ' resolution units: {0}.'
+                    .format(self._img_validator.target_units),
+                    file=stderr
+                    )
+
+                # Image resolution units don't conform to a user set
+                # resolution units so go to the next image in the list.
+                continue
+
+            if not self._img_validator.resolutionMatch():
+                print(
+                    '{0}: Image \'{1}\' does not conform to the required'
+                    .format(self._program_name, basename(tif))
+                    + ' resolution: {0}.'.format(
+                        self._img_validator.target_resolution
+                        ),
+                    file=stderr
+                    )
+
+                # Image resolution doesn't conform to a user set resolution
+                # units so go to the next image in the list.
+                continue
+
+            # Check if reference image size have been set. If not set reference
+            # size from the first image on the stack that confroms with target
+            # resolution and units.
+            height = tif_obj.pages[0].shape[0]
+            width = tif_obj.pages[0].shape[1]
+            if self._img_validator.target_size is None:
+                self.newImageValidator(
+                    (height, width),
+                    self.image_validator[1],
+                    self.image_validator[2]
+                    )
+                self._img_validator.tiff_object = tif_obj
+
+            if not self._img_validator.sizeMatch():
+                print(
+                    '{0}: Image \'{1}\' size is not equal to the size of'
+                    .format(self._program_name, basename(tif))
+                    + ' first image in the list (HxW: {0}x{1}).'\
+                    .format(
+                        self._img_validator.target_size[0],
+                        self._img_validator.target_size[1]
+                        ),
+                    file=stderr
+                    )
+
+                # Image size is not equal to the image size of the first image
+                # in the list so we skip this image and go to the next image
+                # in the list.
+                continue
+
+            # Image conforms to all requirements so add its data to the stack.
+            valid_tifs.append(tif_obj)
+
+
+        if not valid_tifs:
             # Supplied path contains no valid image files.
             print(
                 '{0}: Supplied path \'{1}\' contains no valid image files.'\
@@ -418,26 +347,29 @@ class DefaultAction(ProgramAction):
                 file=stderr
                 )
 
-            self._exit_app(PathError.novalidimages)
+            self._exit_app(AppError.novalidimages)
 
         # Do some image manipulation just for demo purposes.
         # Read image data as array.
         # pixels = tif_file.asarray().astype(np.float)
 
         # Allocate memory for storage of processed pixel data.
-        result = self._for_processing[0].asarray().astype(np.float)
+        result = valid_tifs[0].asarray().astype(np.float)
 
         result[:, :, 0] = result[:, :, 0] / 3.0
         result[:, :, 1] = result[:, :, 1] / 3.0
         result[:, :, 2] = result[:, :, 2] / 3.0
 
-        if self._res_units_set():
+        if self._img_validator.target_units:
             imwrite(
                 'demo_result.tif',
                 result.astype(np.uint16),
-                resolution=(self._resolution, self._resolution),
+                resolution=(
+                    self._img_validator.target_resolution,
+                    self._img_validator.target_resolution
+                    ),
                 metadata={'ResolutionUnit':
-                    res_unit_value(self._resolution_units)}
+                    res_unit_value(self._img_validator.target_units)}
                 )
 
         else:
@@ -447,3 +379,10 @@ class DefaultAction(ProgramAction):
                 )
 
         self._exit_app(0)
+
+    def newImageValidator(self, size=None, units=None, resolution=None):
+        """Put method docstring HERE.
+        """
+
+        if size is not None or units is not None:
+            self._img_validator = TiffConformityMatch(size, units, resolution)

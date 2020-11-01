@@ -248,8 +248,12 @@ class CommandLineApp():
                 )
 
             self._action.scans_path = arguments.scans_dir
-            self._action.resolution = arguments.resolution
-            self._action.resolution_units = arguments.resolution_units
+            self._action.color_channel = arguments.color_channel
+            self._action.newImageValidator(
+                None,
+                arguments.resolution_units,
+                arguments.resolution
+                )
 
     def run(self):
         """This method executes action code.
@@ -297,7 +301,7 @@ There is NO WARRANTY, to the extent permitted by law.'
         )
     program.add_argument(
             '-d', '--scans-dir',
-            metavar='SCANS_DIR',
+            metavar='DIR_PATH',
             type=str,
             nargs='?',
             default='.',
@@ -305,7 +309,7 @@ There is NO WARRANTY, to the extent permitted by law.'
 Current directory is searched by default.')
     program.add_argument(
             '-u', '--resolution-units',
-            metavar='RES_UNITS',
+            metavar='UNIT_STRING',
             type=str,
             nargs='?',
             help='a convinience option for passing scans resolution units. \
@@ -314,12 +318,19 @@ If this option is not supplied processing is carried out without taking \
 resolution into account.')
     program.add_argument(
             '-r', '--resolution',
-            metavar='REF_RES',
+            metavar='RESOLUTION',
             type=int,
             nargs='?',
             default=400,
             help='a convinience option for passing reference scans resolution. \
 If resolution units are not supplied this option is ignored.')
+    program.add_argument(
+            '-c', '--color-channel',
+            metavar='COLOR',
+            type=str,
+            nargs='?',
+            help='a convinience option for selecting image color channel to \
+process. Supported values are \'red\', \'green\' and \'blue\'.')
 
     program.parse_args()
     program.run()
