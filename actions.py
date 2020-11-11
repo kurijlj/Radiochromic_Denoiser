@@ -60,10 +60,12 @@ from tifffile import (
 import numpy as np
 from algorithms import (
     ColorChannelOption,
+    gaussian_kernel,
     ImageDir,
     Path,
     res_unit_value,
-    TiffConformityMatch
+    TiffConformityMatch,
+    wiener_filter
     )
 
 
@@ -354,11 +356,55 @@ class DefaultAction(ProgramAction):
         # pixels = tif_file.asarray().astype(np.float)
 
         # Allocate memory for storage of processed pixel data.
-        result = valid_tifs[0].asarray().astype(np.float)
+        # result = valid_tifs[0].asarray().astype(np.float)
 
-        result[:, :, 0] = result[:, :, 0] / 3.0
-        result[:, :, 1] = result[:, :, 1] / 3.0
-        result[:, :, 2] = result[:, :, 2] / 3.0
+        # result[:, :, 0] = result[:, :, 0] / 3.0
+        # result[:, :, 1] = result[:, :, 1] / 3.0
+        # result[:, :, 2] = result[:, :, 2] / 3.0
+
+        result = None
+        if self._selchnl.isNone():
+            height, width = self._img_validator.target_size
+            result = np.zeros((height, width, 3), dtype=np.float)
+        else:
+            result = np.zeros(self._img_validator.target_size, dtype=np.float)
+
+        weight = len(valid_tifs)
+
+        for tif in valid_tifs:
+            data = tif.asarray().astype(np.float)
+
+            if self._selchnl.isNone():
+                result[:, :, 0] += (data[:, :, 0] / weight)
+                result[:, :, 1] += (data[:, :, 1] / weight)
+                result[:, :, 2] += (data[:, :, 2] / weight)
+
+            else:
+                result += (data[:, :, self._selchnl.int] / weight)
+
+        # Calculate signal to noise ratio of the averaged image.
+        snr = None
+        if self._selchnl.isNone():
+            snr = (
+                # result[:, :, 0].mean() / result[:, :, 0].var(),
+                # result[:, :, 1].mean() / result[:, :, 1].var(),
+                # result[:, :, 2].mean() / result[:, :, 2].var(),
+                result[:, :, 0].mean() / result[:, :, 0].std(),
+                result[:, :, 1].mean() / result[:, :, 1].std(),
+                result[:, :, 2].mean() / result[:, :, 2].std(),
+                )
+        else:
+            # snr = result.mean() / result.var()
+            snr = result.mean() / result.std()
+
+        # Denoise image using Wiener filter.
+        kernel = gaussian_kernel(3)
+        if self._selchnl.isNone():
+            result[:, :, 0] = wiener_filter(result[:, :, 0], kernel, snr[0])
+            result[:, :, 1] = wiener_filter(result[:, :, 1], kernel, snr[1])
+            result[:, :, 2] = wiener_filter(result[:, :, 2], kernel, snr[2])
+        else:
+            result = wiener_filter(result, kernel, snr)
 
         if self._img_validator.target_units:
             imwrite(

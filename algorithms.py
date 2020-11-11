@@ -50,8 +50,11 @@
 # =============================================================================
 
 from imghdr import what
+from numpy.fft import fft2, ifft2
 from pathlib import Path
+from scipy.signal import gaussian
 from tifffile import TiffFile
+import numpy as np
 
 
 # =============================================================================
@@ -96,7 +99,7 @@ class ColorChannelOption():
 
         if self._chnl is not None:
             if self.isValid():
-                map_to_int = {'blue': 0, 'green': 1, 'red': 2}
+                map_to_int = {'red': 0, 'green': 1, 'blue': 2}
                 return map_to_int[self._chnl]
 
         return None
@@ -500,3 +503,26 @@ def res_unit_value(res_unit_str):
         return 3
 
     return 1
+
+def wiener_filter(img, kernel, snr):
+    """TODO: Put function docstring here.
+    """
+
+    nsr = 1 / snr
+    kernel /= np.sum(kernel)
+    dummy = np.copy(img)
+    dummy = fft2(dummy)
+    kernel = fft2(kernel, s = img.shape)
+    kernel = np.conj(kernel) / (np.abs(kernel) ** 2 + nsr)
+    dummy = dummy * kernel
+    dummy = np.abs(ifft2(dummy))
+    return dummy
+
+def gaussian_kernel(kernel_size = 3):
+    """TODO: Put function docstring here.
+    """
+
+    h = gaussian(kernel_size, kernel_size / 3).reshape(kernel_size, 1)
+    h = np.dot(h, h.transpose())
+    h /= np.sum(h)
+    return h
