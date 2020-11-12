@@ -254,6 +254,10 @@ class CommandLineApp():
                 arguments.resolution_units,
                 arguments.resolution
                 )
+            self._action.newFilterValidator(
+                arguments.filter,
+                arguments.kernel_size
+                )
 
     def run(self):
         """This method executes action code.
@@ -312,7 +316,6 @@ Current directory is searched by default.')
             metavar='UNIT_STRING',
             type=str,
             nargs='?',
-            default='dpi',
             help='a convinience option for passing scans resolution units. \
 Option accepts two values: dpi (dots per inch) and dpm (dots per milimeter). \
 If this option is not supplied processing is carried out without taking \
@@ -326,6 +329,27 @@ resolution into account. Default value is \'dpi\'')
             help='a convinience option for passing reference scans resolution. \
 If resolution units are not supplied this option is ignored. Default value is \
 400.')
+    program.add_argument(
+            '-f', '--filter',
+            metavar='FILTER',
+            type=str,
+            nargs='?',
+            default='no',
+            help='a convinience option for selecting denoising filter. \
+It can be one of the three values: no (do not apply filter), median (apply \
+median filter, wiener (apply zero phase wiener filter). If one of the filters \
+is selected, one must specify size of the deconvolution kernel using option \
+-k / --kernel-size.')
+    program.add_argument(
+            '-k', '--kernel-size',
+            metavar='KERNEL_SIZE',
+            type=int,
+            nargs='?',
+            default=3,
+            help='a convinience option for passing size of the deconvolution \
+kernel for the image smoothing algorithms. Argument accepts odd numbers > 3. \
+If no denoising filter is selected this option is ignored. Default value \
+is 3.')
     program.add_argument(
             '-c', '--color-channel',
             metavar='COLOR',

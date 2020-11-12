@@ -266,6 +266,81 @@ class DataDir():
         return None
 
 
+class FilterSelectionValidate():
+    """TODO: Put class docstring here.
+    """
+
+    filters = ('no', 'median', 'wiener')
+    min_size = 3.0
+
+    def __init__(self, filter_name='no', kernel_size=3):
+        self._filter = filter_name
+        self._size = kernel_size
+
+    @property
+    def filter(self):
+        """TODO: Put class docstring here.
+        """
+
+        return self._filter
+
+    @property
+    def size(self):
+        """TODO: Put class docstring here.
+        """
+
+        return self._size
+
+    def FilterIsSelected(self):
+        """TODO: Put class docstring here.
+        """
+
+        if self._filter != FilterSelectionValidate.filters[0]:
+            return True
+
+        return False
+
+    def FilterIsValid(self):
+        """TODO: Put class docstring here.
+        """
+
+        if self._filter in FilterSelectionValidate.filters:
+            return True
+
+        return False
+
+    def isMedian(self):
+        """TODO: Put class docstring here.
+        """
+
+        if self._filter == FilterSelectionValidate.filters[1]:
+            return True
+
+        return False
+
+    def isWiener(self):
+        """TODO: Put class docstring here.
+        """
+
+        if self._filter == FilterSelectionValidate.filters[2]:
+            return True
+
+        return False
+
+    def KernelSizeIsValid(self):
+        """TODO: Put class docstring here.
+        """
+
+        # Check if size is bigger than min_size.
+        if self._size >= FilterSelectionValidate.min_size:
+
+            # Check if size is an odd number.
+            if (self._size % 2) != 0:
+                return True
+
+        return False
+
+
 class ImageDir(DataDir):
     """TODO: Put class docstring here.
     """

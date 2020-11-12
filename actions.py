@@ -56,6 +56,7 @@ from sys import (
     )
 from os.path import basename
 from enum import Enum
+from scipy import ndimage
 from tifffile import (
     imwrite,
     TiffFile
@@ -63,6 +64,7 @@ from tifffile import (
 import numpy as np
 from algorithms import (
     ColorChannelOption,
+    FilterSelectionValidate,
     gaussian_kernel,
     ImageDir,
     Path,
@@ -92,6 +94,8 @@ class AppError(Enum):
     emptydir = 4
     novalidimages = 5
     invalidcolorchannel = 6
+    invalidfilter = 7
+    invalidkernelsize = 8
 
 
 # =============================================================================
@@ -162,6 +166,7 @@ class DefaultAction(ProgramAction):
         self._program_name = prog
         # Set default path for seraching for film scans.
         self._scans_path = ImageDir('.', 'tiff')
+        self._filter_validator = FilterSelectionValidate()
         self._img_validator = TiffConformityMatch()
         self._selchnl = ColorChannelOption()
 
@@ -237,6 +242,7 @@ class DefaultAction(ProgramAction):
                 )
             self._exit_app(AppError.nonexistentpath)
 
+        # Check if provided path is directory at all.
         if not self._scans_path.isDir:
             print(
                 '{0}: Supplied path \'{1}\' is not a dir.'.format(
@@ -247,6 +253,7 @@ class DefaultAction(ProgramAction):
                 )
             self._exit_app(AppError.notdir)
 
+        # Check if provided path is empty (contain no files).
         if self._scans_path.isEmpty:
             # Supplied path contains no files.
             print(
@@ -258,6 +265,34 @@ class DefaultAction(ProgramAction):
                 )
             self._exit_app(AppError.emptydir)
 
+        # Check if selected image denoising filter is valid (if one selected at
+        # all).
+        if self._filter_validator.FilterIsSelected():
+            if not self._filter_validator.FilterIsValid():
+                # Invalid filter selected.
+                print(
+                    '{0}: Selected image filter ({1}) is not supported.'\
+                            .format(
+                        self._program_name,
+                        self._filter_validator.filter
+                        ),
+                    file=stderr
+                    )
+                self._exit_app(AppError.invalidfilter)
+
+            if not self._filter_validator.KernelSizeIsValid():
+                # Invalid filter selected.
+                print(
+                    '{0}: Selected kernel size ({1}x{1}) is not supported.'\
+                            .format(
+                        self._program_name,
+                        self._filter_validator.size
+                        ),
+                    file=stderr
+                    )
+                self._exit_app(AppError.invalidkernelsize)
+
+        # Check if selected color channel value is valid..
         if not self._selchnl.isValid():
             # Color channel option value is not valid.
             print(
@@ -276,7 +311,7 @@ class DefaultAction(ProgramAction):
         # Check if contents of the user supplied directory confrom to the
         # specified conditions.
         for tif in tifs:
-            print('Loading image: \'{0}\'.'.format(Path(tif).name))
+            print('Loading image: \'{0}\' ...'.format(Path(tif).name))
             stdout.flush()
             tif_obj = TiffFile(tif)
             self._img_validator.tiff_object = tif_obj
@@ -358,17 +393,6 @@ class DefaultAction(ProgramAction):
 
             self._exit_app(AppError.novalidimages)
 
-        # Do some image manipulation just for demo purposes.
-        # Read image data as array.
-        # pixels = tif_file.asarray().astype(np.float)
-
-        # Allocate memory for storage of processed pixel data.
-        # result = valid_tifs[0].asarray().astype(np.float)
-
-        # result[:, :, 0] = result[:, :, 0] / 3.0
-        # result[:, :, 1] = result[:, :, 1] / 3.0
-        # result[:, :, 2] = result[:, :, 2] / 3.0
-
         print('Averaging images ...')
         stdout.flush()
 
@@ -392,39 +416,74 @@ class DefaultAction(ProgramAction):
             else:
                 result += (data[:, :, self._selchnl.int] / weight)
 
-        # Calculate signal to noise ratio of the averaged image.
-        snr = None
-        if self._selchnl.isNone():
-            snr = (
-                # result[:, :, 0].mean() / result[:, :, 0].var(),
-                # result[:, :, 1].mean() / result[:, :, 1].var(),
-                # result[:, :, 2].mean() / result[:, :, 2].var(),
-                result[:, :, 0].mean() / result[:, :, 0].std(),
-                result[:, :, 1].mean() / result[:, :, 1].std(),
-                result[:, :, 2].mean() / result[:, :, 2].std(),
-                )
-        else:
-            # snr = result.mean() / result.var()
-            snr = result.mean() / result.std()
+        if self._filter_validator.FilterIsSelected():
+            # Denoise image using selected filter.
+            print('Applying filter ...')
+            stdout.flush()
 
-        # Denoise image using Wiener filter.
-        print('Applying filter ...')
-        stdout.flush()
+            if self._filter_validator.isMedian():
+                # Median filter is selected.
+                result = ndimage.median_filter(
+                    result,
+                    self._filter_validator.size
+                    )
 
-        kernel = gaussian_kernel(3)
-        if self._selchnl.isNone():
-            result[:, :, 0] = wiener_filter(result[:, :, 0], kernel, snr[0])
-            result[:, :, 1] = wiener_filter(result[:, :, 1], kernel, snr[1])
-            result[:, :, 2] = wiener_filter(result[:, :, 2], kernel, snr[2])
-        else:
-            result = wiener_filter(result, kernel, snr)
+            else:
+                # Wiener filter is selected. First we have to calculate signal
+                # to noise ratio of the averaged image.
+                snr = None
+                if self._selchnl.isNone():
+                    snr = (
+                        result[:, :, 0].mean() / result[:, :, 0].std(),
+                        result[:, :, 1].mean() / result[:, :, 1].std(),
+                        result[:, :, 2].mean() / result[:, :, 2].std(),
+                        )
+                else:
+                    snr = result.mean() / result.std()
+
+                kernel = gaussian_kernel(self._filter_validator.size)
+                if self._selchnl.isNone():
+                    result[:, :, 0] = wiener_filter(
+                        result[:, :, 0],
+                        kernel,
+                        snr[0]
+                        )
+                    result[:, :, 1] = wiener_filter(
+                        result[:, :, 1],
+                        kernel,
+                        snr[1]
+                        )
+                    result[:, :, 2] = wiener_filter(
+                        result[:, :, 2],
+                        kernel,
+                        snr[2]
+                        )
+                else:
+                    result = wiener_filter(result, kernel, snr)
 
         print('Saving result ...')
         stdout.flush()
 
+        res = self._img_validator.target_resolution
+        uni = self._img_validator.target_units
+        output_name = 'mean_{0}x{1}_{2}{3}'.format(
+            self._img_validator.target_size[0],
+            self._img_validator.target_size[1],
+            res if res is not None else 'no-',
+            uni if uni is not None else 'res'
+            )
+
+        if self._filter_validator.FilterIsSelected():
+            output_name += '_{0}_{1}x{1}'.format(
+                self._filter_validator.filter,
+                self._filter_validator.size
+                )
+
+        output_name += '.tif'
+
         if self._img_validator.target_units:
             imwrite(
-                'demo_result.tif',
+                output_name,
                 result.astype(np.uint16),
                 resolution=(
                     self._img_validator.target_resolution,
@@ -436,11 +495,21 @@ class DefaultAction(ProgramAction):
 
         else:
             imwrite(
-                'demo_result.tif',
+                output_name,
                 result.astype(np.uint16),
                 )
 
         self._exit_app(0)
+
+    def newFilterValidator(self, filter_name, kernel_size):
+        """Put method docstring HERE.
+        """
+
+        if filter_name != FilterSelectionValidate.filters[0]:
+            self._filter_validator = FilterSelectionValidate(
+                filter_name,
+                kernel_size
+                )
 
     def newImageValidator(self, size=None, units=None, resolution=None):
         """Put method docstring HERE.
