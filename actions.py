@@ -50,7 +50,10 @@
 # Modules import section
 # =============================================================================
 
-from sys import stderr
+from sys import (
+    stderr,
+    stdout
+    )
 from os.path import basename
 from enum import Enum
 from tifffile import (
@@ -274,6 +277,7 @@ class DefaultAction(ProgramAction):
         # specified conditions.
         for tif in tifs:
             print('Loading image: \'{0}\'.'.format(Path(tif).name))
+            stdout.flush()
             tif_obj = TiffFile(tif)
             self._img_validator.tiff_object = tif_obj
 
@@ -285,6 +289,7 @@ class DefaultAction(ProgramAction):
                     .format(self._img_validator.target_units),
                     file=stderr
                     )
+                stdout.flush()
 
                 # Image resolution units don't conform to a user set
                 # resolution units so go to the next image in the list.
@@ -299,6 +304,7 @@ class DefaultAction(ProgramAction):
                         ),
                     file=stderr
                     )
+                stdout.flush()
 
                 # Image resolution doesn't conform to a user set resolution
                 # units so go to the next image in the list.
@@ -328,6 +334,7 @@ class DefaultAction(ProgramAction):
                         ),
                     file=stderr
                     )
+                stdout.flush()
 
                 # Image size is not equal to the image size of the first image
                 # in the list so we skip this image and go to the next image
@@ -361,6 +368,9 @@ class DefaultAction(ProgramAction):
         # result[:, :, 0] = result[:, :, 0] / 3.0
         # result[:, :, 1] = result[:, :, 1] / 3.0
         # result[:, :, 2] = result[:, :, 2] / 3.0
+
+        print('Averaging images ...')
+        stdout.flush()
 
         result = None
         if self._selchnl.isNone():
@@ -398,6 +408,9 @@ class DefaultAction(ProgramAction):
             snr = result.mean() / result.std()
 
         # Denoise image using Wiener filter.
+        print('Applying filter ...')
+        stdout.flush()
+
         kernel = gaussian_kernel(3)
         if self._selchnl.isNone():
             result[:, :, 0] = wiener_filter(result[:, :, 0], kernel, snr[0])
@@ -405,6 +418,9 @@ class DefaultAction(ProgramAction):
             result[:, :, 2] = wiener_filter(result[:, :, 2], kernel, snr[2])
         else:
             result = wiener_filter(result, kernel, snr)
+
+        print('Saving result ...')
+        stdout.flush()
 
         if self._img_validator.target_units:
             imwrite(

@@ -25,7 +25,7 @@
 #
 # 2020-10-25 Ljubomir Kurij <ljubomir_kurij@protonmail.com>
 #
-# * denoiser.py: created.
+# * denoise.py: created.
 #
 # =============================================================================
 
@@ -312,10 +312,11 @@ Current directory is searched by default.')
             metavar='UNIT_STRING',
             type=str,
             nargs='?',
+            default='dpi',
             help='a convinience option for passing scans resolution units. \
 Option accepts two values: dpi (dots per inch) and dpm (dots per milimeter). \
 If this option is not supplied processing is carried out without taking \
-resolution into account.')
+resolution into account. Default value is \'dpi\'')
     program.add_argument(
             '-r', '--resolution',
             metavar='RESOLUTION',
@@ -323,7 +324,8 @@ resolution into account.')
             nargs='?',
             default=400,
             help='a convinience option for passing reference scans resolution. \
-If resolution units are not supplied this option is ignored.')
+If resolution units are not supplied this option is ignored. Default value is \
+400.')
     program.add_argument(
             '-c', '--color-channel',
             metavar='COLOR',
