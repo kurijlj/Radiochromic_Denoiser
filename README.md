@@ -1,2 +1,2 @@
 # Radiochromic_Denoiser
-Simple python script to average and denoise a set of radiochromic film scans using Wiener filter.
+Simple python script to average a set of radiochromic film scans, and remove noise from averaged image using median or Wiener filter.
